@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+							http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+	version="2.5" xmlns="http://java.sun.com/xml/ns/javaee">
+
+	<display-name>marathon-registration</display-name>
+
+	<!-- Enable usage of Cloud persistence service -->
+	<resource-ref>
+		<res-ref-name>jdbc/DefaultDB</res-ref-name>
+		<res-type>javax.sql.DataSource</res-type>
+	</resource-ref>
+	<resource-ref>
+		<res-ref-name>TenantContext</res-ref-name>
+		<res-type>com.sap.cloud.account.TenantContext</res-type>
+	</resource-ref>
+	<resource-ref>
+		<res-ref-name>connectivityConfiguration</res-ref-name>
+		<res-type>com.sap.core.connectivity.api.configuration.ConnectivityConfiguration</res-type>
+	</resource-ref>
+	
+
+	<!-- ============================================================== -->
+	<!-- Welcome file list -->
+	<!-- ============================================================== -->
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<servlet>
+		<servlet-name>ODataServlet</servlet-name>
+		<servlet-class>org.apache.cxf.jaxrs.servlet.CXFNonSpringJaxrsServlet</servlet-class>
+		<init-param>
+			<param-name>javax.ws.rs.Application</param-name>
+			<param-value>org.apache.olingo.odata2.core.rest.app.ODataApplication</param-value>
+		</init-param>
+		<init-param>
+			<param-name>org.apache.olingo.odata2.service.factory</param-name>
+			<param-value>com.sap.csr.odata.ServiceFactory</param-value>
+		</init-param>
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>ODataServlet</servlet-name>
+		<url-pattern>/ODataSrv/*</url-pattern>
+	</servlet-mapping>
+	
+    
+    <!-- attachment -->
+    <servlet>
+        <servlet-name>AttachmentServlet</servlet-name>
+        <servlet-class>com.sap.csr.odata.AttachmentMng</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>AttachmentServlet</servlet-name>
+        <url-pattern>/Attachment</url-pattern>
+    </servlet-mapping>
+    
+     <!-- download -->
+    <servlet>
+        <servlet-name>DownloadServlet</servlet-name>
+        <servlet-class>com.sap.csr.odata.DownloadMng</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>DownloadServlet</servlet-name>
+        <url-pattern>/Download</url-pattern>
+    </servlet-mapping>
+    
+   
+
+	<!-- roles -->
+	<login-config>
+		<auth-method>FORM</auth-method>
+	</login-config>
+ 	
+	
+	
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Protected Area</web-resource-name>
+			<url-pattern>/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Everyone</role-name>
+		</auth-constraint>
+	</security-constraint>
+	<security-role>
+		<description>All SAP HANA Cloud Platform users</description>
+		<role-name>Everyone</role-name>
+	</security-role>   
+	
+</web-app>
