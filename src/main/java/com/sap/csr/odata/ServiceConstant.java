@@ -26,6 +26,7 @@ public interface ServiceConstant {
 	public static final String REGISTRATION_BY_PROJECT_AND_USERID="GetRegistrationByProjectAndUserId";
 	public static final String ATTACHMENT_BY_ENTRY_AND_TYPE = "GetAttachmentByEntryAndType";
 	public static final String ATTACHMENT_BY_ENTRY = "GetAttachmentByEntry";
+	public static final String ATTACHMENT_BY_ALL_PARAM="GetAttachmentByAllParam";
 	  
 	
 	public static final String EMAIL = "email";

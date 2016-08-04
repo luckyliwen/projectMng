@@ -27,7 +27,10 @@ import com.sap.csr.odata.ServiceConstant;
 @NamedQueries({ 
     @NamedQuery(name=ServiceConstant.ATTACHMENT_BY_ENTRY_AND_TYPE, query="select a from Attachment a where a.entryId= :entryId and a.type= :type"),
     //just need the entry can get all the attachment for one project, one user
-    @NamedQuery(name=ServiceConstant.ATTACHMENT_BY_ENTRY, query="select a from Attachment a where a.userId = :userId  and a.entryId= :entryId")
+    @NamedQuery(name=ServiceConstant.ATTACHMENT_BY_ENTRY, query="select a from Attachment a where a.userId = :userId  and a.entryId= :entryId"),
+    
+    @NamedQuery(name=ServiceConstant.ATTACHMENT_BY_ALL_PARAM, 
+    	query="select a from Attachment a where a.projectId = :projectId and  a.userId = :userId and a.entryId= :entryId and a.type=:type")
 }) 
 
 public class Attachment implements Serializable {
@@ -52,6 +55,8 @@ public class Attachment implements Serializable {
     
 //    private String fileName;  //file name of the file upload by user
     private String mimeType;
+    
+    private long  size;  //file size
     
     //@Transient
 //    private String theUserId;
@@ -87,6 +92,11 @@ public class Attachment implements Serializable {
 	public final void setMimeType(String mimeType) {
 		this.mimeType = mimeType;
 	}
+	
+	public final String getFileExtension() {
+		return this.mimeType;  //need 
+	}
+	
 	/**
 	 * @return the content
 	 */
@@ -98,6 +108,7 @@ public class Attachment implements Serializable {
 	 */
 	public final void setContent(byte[] content) {
 		this.content = content;
+		this.setSize( content.length);
 	}
 
 	//the key will not change
@@ -105,6 +116,7 @@ public class Attachment implements Serializable {
 //		setFileName(newAttachment.getFileName());
 		setMimeType(newAttachment.getMimeType());
 		setContent(newAttachment.getContent());
+		setSize( newAttachment.getSize());
 	}
 	
 
@@ -168,6 +180,20 @@ public class Attachment implements Serializable {
 	 */
 	public final void setEntryId(String entryId) {
 		this.entryId = entryId;
+	}
+
+	/**
+	 * @return the size
+	 */
+	public final long getSize() {
+		return size;
+	}
+
+	/**
+	 * @param size the size to set
+	 */
+	public final void setSize(long size) {
+		this.size = size;
 	}
 
 
