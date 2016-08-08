@@ -18,7 +18,7 @@ public class BaseModel {
 	}
 	
 	public void getEntityManager() {
-		if (em != null)
+		if (em != null && em.isOpen())
 			return ;
 		
 		try {

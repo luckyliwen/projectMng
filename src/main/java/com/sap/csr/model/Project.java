@@ -18,10 +18,10 @@ import javax.persistence.TemporalType;
 import com.sap.csr.odata.ServiceConstant;
 import com.sap.csr.odata.UserMng;
 
-//the porject management informaiton, mainly for project general information and form information
+//the project management information, mainly for project general information and form information
 @Entity(name="Project")
 @NamedQueries({ 
-	
+	@NamedQuery(name=ServiceConstant.PROJECT_BY_ID, query="select P from Project p where p.projectId=:projectId"),
 })
 
 public class Project implements Serializable {
@@ -48,9 +48,9 @@ public class Project implements Serializable {
 	private Date modifiedTime;
 
 	//for approve and email
-	private boolean needAprrove = false;  
+	private boolean needApprove = false;  
 	private boolean needEmailNotification = false; //depend on need approve
-	private long maxNum = 0;  //maximun for number 
+	 
 	private boolean allowCancel = false; 
 	
 	//email notification 
@@ -69,6 +69,39 @@ public class Project implements Serializable {
 	
 	//some extra attribute for extension
 	String extraAttr0, extraAttr1, extraAttr2,extraAttr3;
+	
+	//sub-project information
+	private long registrationLimit = 0;  //register limit for registration:  -1 means sub-project, 0 means no limiation, >0 means normal limiation
+	@Column(name = "subProjectInfo", length = 2000)
+	String subProjectInfo;
+	
+	@Column(name = "subProjectLimit", length = 1000)
+	String subProjectLimit;
+	
+	/**
+	 * Get the limit of the sub-project, 0 means no limitation
+	 * @param subProject
+	 * @return
+	 */
+	public long getLimitForSubProject(String subProject) throws Exception {
+		String []aInfo = subProjectInfo.split(";");
+		String []aLimit = subProjectLimit.split(";");
+		if ( aInfo.length != aLimit.length)
+			throw new Exception("Project content wrong: subProjectInfo not consiste with subProjectLimit");
+		
+		int i=0;
+		for ( String info: aInfo) {
+			if ( subProject.equals(info)) {
+				if ( aLimit[i].length() ==0)
+					return 0;
+				else 
+					return Long.parseLong(aLimit[i]);
+			}
+			i++;
+		}
+		
+		return 0;
+	}
 	
 	/**
 	 * @return the projectId
@@ -145,27 +178,16 @@ public class Project implements Serializable {
 	/**
 	 * @return the needAprrove
 	 */
-	public final boolean isNeedAprrove() {
-		return needAprrove;
+	public final boolean isNeedApprove() {
+		return needApprove;
 	}
 	/**
 	 * @param needAprrove the needAprrove to set
 	 */
-	public final void setNeedAprrove(boolean needAprrove) {
-		this.needAprrove = needAprrove;
+	public final void setNeedApprove(boolean needApprove) {
+		this.needApprove = needApprove;
 	}
-	/**
-	 * @return the maxNum
-	 */
-	public final long getMaxNum() {
-		return maxNum;
-	}
-	/**
-	 * @param maxNum the maxNum to set
-	 */
-	public final void setMaxNum(long maxNum) {
-		this.maxNum = maxNum;
-	}
+	
 	/**
 	 * @return the allowCancel
 	 */
@@ -432,6 +454,42 @@ public class Project implements Serializable {
 	 */
 	public final void setRegistrationSecurity(String registrationSecurity) {
 		this.registrationSecurity = registrationSecurity;
+	}
+	/**
+	 * @return the subProjectInfo
+	 */
+	public final String getSubProjectInfo() {
+		return subProjectInfo;
+	}
+	/**
+	 * @param subProjectInfo the subProjectInfo to set
+	 */
+	public final void setSubProjectInfo(String subProjectInfo) {
+		this.subProjectInfo = subProjectInfo;
+	}
+	/**
+	 * @return the subProjectLimit
+	 */
+	public final String getSubProjectLimit() {
+		return subProjectLimit;
+	}
+	/**
+	 * @param subProjectLimit the subProjectLimit to set
+	 */
+	public final void setSubProjectLimit(String subProjectLimit) {
+		this.subProjectLimit = subProjectLimit;
+	}
+	/**
+	 * @return the registrationLimit
+	 */
+	public final long getRegistrationLimit() {
+		return registrationLimit;
+	}
+	/**
+	 * @param registrationLimit the registrationLimit to set
+	 */
+	public final void setRegistrationLimit(long registrationLimit) {
+		this.registrationLimit = registrationLimit;
 	}
 		
 }

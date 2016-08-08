@@ -1,120 +1,346 @@
 package com.sap.csr.model;
 
-import java.io.Serializable;
-import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.Formatter;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-
-
-import javax.naming.NamingException;
-import javax.persistence.CascadeType;
+import javax.persistence.Access;
+import javax.persistence.AccessType;
 import javax.persistence.Column;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 import javax.persistence.TypedQuery;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.persistence.Entity;
-import javax.persistence.EntityManager;
-import javax.persistence.FetchType;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
-import javax.persistence.JoinColumn;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
-import javax.persistence.NoResultException;
-import javax.persistence.OneToMany;
-import javax.persistence.PostLoad;
+import javax.persistence.PersistenceException;
 import javax.persistence.PrePersist;
 import javax.persistence.PreRemove;
 import javax.persistence.PreUpdate;
 import javax.persistence.Query;
-import javax.persistence.Table;
 
-import org.eclipse.persistence.annotations.Multitenant;
-import org.eclipse.persistence.annotations.TenantDiscriminatorColumn;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.sap.csr.odata.CSRProcessor;
-import com.sap.csr.odata.EmailMng;
-import com.sap.csr.odata.JpaEntityManagerFactory;
 import com.sap.csr.odata.ServiceConstant;
-import com.sap.csr.odata.Util;
+import com.sap.csr.odata.Util;  
 
-
-@Entity(name="Registration")
-@NamedQueries({ 
-	@NamedQuery(name=ServiceConstant.REGISTRATION_BY_PROJECT_AND_USERID, query="select r from Registration r where r.projectId=:projectId and r.userId = :userId"),
-//	@NamedQuery(name=ServiceConstant.REGISTRATION_BY_EMAIL, query="select r from Registration r where r.email = :email"),
-//	@NamedQuery(name=ServiceConstant.REGISTRATION_NO_SUBMITTIME, query="select r from Registration r where r.submittedTime IS NULL and (r.status =\"Approved\" or r.status=\"Submitted\") ")
+@Entity(name = "Registration")
+@NamedQueries({
+@NamedQuery(name = ServiceConstant.REGISTRATION_BY_PROJECT_AND_USERID, 
+	query = "select r from Registration r where r.projectId=:projectId and r.userId = :userId"),
+@NamedQuery(name = ServiceConstant.REGISTRATION_FROM_WAITLIST,
+	query="select r from Registration r where r.projectId = :projectId and r.status=com.sap.csr.model.Status.Waiting order by r.submittedTime"),
+@NamedQuery(name = ServiceConstant.REGISTRATION_FROM_WAITLIST_SUBPROJECT,
+query="select r from Registration r where r.projectId = :projectId and r.subProject=:subProject and r.status=com.sap.csr.model.Status.Waiting  order by r.submittedTime"),
 })
 
-public class Registration extends BaseModel  implements ServiceConstant{
-	
-	private static long serialVersionUID = 1L;
-
-	@Id  @GeneratedValue
-    private long registerId;
-	
-	@Id 
-	private long projectId;
+public class Registration extends BaseModel implements ServiceConstant {
+	transient Logger logger  = LoggerFactory.getLogger(Registration.class); 
 	
 	@Id
-	@Column(name = "SAPUSERID", length = 10)
-	private String userId;  //id of sap id
-	private String sapUserName;   //always will be the first entry, can't change
-	
-	//for approve, calcel, reject 
-	private String status ;
+	@GeneratedValue
+	private long registerId;
+
+	@Id
+	private long projectId;
+
+	@Id
+	@Column(name = "UERID", length = 10)
+	private String userId; // employee id, get from IdP
+	private String userName; // employee name, get from IdP
+	private String subProject; // needed when it has sub-project limitation
+
+	// for approve, calcel, reject
+	// private String status ;
+	@Enumerated(EnumType.STRING)
+	private Status status;
 	private String rejectReason;
 	private String cancelReason;
-	private int    entriesCount;   //multiple			
-	
-	//some common information 
-	private String idOrPassort; //身份证 ID or passport
-	private String gender;  //Male or Female
+	private int entriesCount; // multiple
+
+	// some common information
+	private String idOrPassort; // 身份证 ID or passport
+	private String gender; // Male or Female
 	private String phone;
 	private String email;
-	private int    age;
-	private String birthdate;  //出生日期
-    private String name;   //chinese name or kid's name
+	private int age;
+	private String birthdate;
+	private String name; // employee name or kid's name,
 	private String nationality;
 	private String department;
 	private String tshirtSize;
-	private String location ;
+	private String location;
 	private String club;
-	
+
 	@Temporal(TemporalType.TIMESTAMP)
-    private Date submittedTime;
+	private Date submittedTime;
 	@Temporal(TemporalType.TIMESTAMP)
 	private Date modifiedTime;
 
-	//some extra attribute can set by usre 
-	private String  attr0, attr1, attr2, attr3, attr4, attr5, attr6, attr7, attr8, attr9;
-	private String  attr10, attr11, attr12, attr13, attr14, attr15, attr16, attr17, attr18, attr19;
-	
-	//now max support 5 attachment, here just store the file name so user know upload which file, for the project setup it need 
-	//define the attachment type
-	private String  fileName0, fileName1, fileName2, fileName3, fileName4;
-	
+	// some extra attribute can set by user
+	private String attr0, attr1, attr2, attr3, attr4, attr5, attr6, attr7, attr8, attr9;
+	private String attr10, attr11, attr12, attr13, attr14, attr15, attr16, attr17, attr18, attr19;
+
+	// now max support 5 attachment, here just store the file name so user know
+	// upload which file, for the project setup it need
+	// define the attachment type
+	private String fileName0, fileName1, fileName2, fileName3, fileName4;
+
+	public enum ActionFlag {
+		Submit, Approve, Cancel, Others
+	};
+
+	// For the approve/submit we need check whether it exceed the limitation, so
+	// we need know whether it is for the "Submit"/"Approve" action
+	// or the normal update trigger by administrator, we use this flag to
+	// identify it
+	@Enumerated(EnumType.STRING)
+	@Access(AccessType.FIELD)
+	private ActionFlag actionFlag = ActionFlag.Others;
+
+	// !!used to check the limitation of the registered project
+	transient Project project;
+	transient long registrationLimit; // the max limitation
+
 	public Registration() {
 		super();
 	}
-	
-	public static Registration createNewRegistration(UserInfo userInfo){
+
+	public static Registration createNewRegistration(UserInfo userInfo) {
 		Registration reg = new Registration();
 		reg.setEmail(userInfo.getEmail());
-		reg.setName(userInfo.getName());
+		reg.setUserName(userInfo.getName());
 		reg.setUserId(userInfo.getUserId());
-		reg.setStatus("New");
+		reg.setStatus(Status.New);
 		return reg;
 	}
+
+	public void setSubmitModifyTime() {
+		// here should ensure it only update once
+		// if ( status.equals("Submitted")) {
+		if (status == Status.Submitted) {
+			if (submittedTime == null)
+				submittedTime = new Date();
+		}
+
+		modifiedTime = new Date();
+	}
+
+	/**
+	 * @return the modifiedTime
+	 * @throws Exception
+	 */
+	@PreUpdate
+	public void onPreUpdate() throws Exception {
+		setSubmitModifyTime();
+		checkLimitation();
+		//reset flag to void affect next time check
+		setActionFlag( ActionFlag.Others);
+	}
+
+	/**
+	 * Get the Project from JPA by the projectId
+	 */
+	public void getProject() {
+		if (project == null) {
+			getEntityManager();
 	
+			TypedQuery query = em.createNamedQuery(PROJECT_BY_ID, Project.class);
+			query.setParameter("projectId", projectId);
 	
+			project = (Project) query.getSingleResult();
+		}
+	}
+
+	/**
+	 * Only care about the registrationLimit, not considerate the needApprove
+	 * 
+	 * @return
+	 * @throws Exception
+	 */
+	public boolean needCheckLimitation() throws Exception {
+		getProject();
+
+		long regLimit = project.getRegistrationLimit();
+		if (regLimit == 0)
+			return false;
+		else if (regLimit == -1) {
+			// sub-project, need check that
+			registrationLimit = project.getLimitForSubProject(subProject);
+			return registrationLimit > 0;
+		} else {
+			registrationLimit = project.getRegistrationLimit();
+			return true;
+		}
+	}
+
+	// ??need check whether need synchronozed
+	public boolean isExceedLimitation() {
+		getEntityManager();
+		if (project.isNeedApprove()) {
+			if (status != Status.Approved)
+				return false;
+		} else {
+			if (status != Status.Submitted)
+				return false;
+		}
+
+		Query query;
+		Status checkStatus = project.isNeedApprove() ? Status.Approved : Status.Submitted;
 		
+		if (project.getRegistrationLimit() == -1) {
+			// subproject
+			String queryStr = "select count(r) from Registration r where r.projectId = :projectId and r.status=:status and r.subProject=:subProject";
+			query = em.createQuery(queryStr);
+			query.setParameter("subProject", subProject);
+		} else {
+			String queryStr = "select count(r) from Registration r where r.projectId = :projectId and r.status=:status ";
+			query = em.createQuery(queryStr);
+		}
+		query.setParameter("status", checkStatus);
+		query.setParameter("projectId", projectId);
+		Long count = (Long) query.getSingleResult();
+
+		if (count >= registrationLimit)
+			return true;
+		else
+			return false;
+	}
+
+	@PreRemove
+	public void onPreRemove() {
+		// need update the entriesCount, so later can easy know the entries
+		// which create by some user for one project
+		getEntityManager();
+
+		Query query = em.createNamedQuery(REGISTRATION_BY_PROJECT_AND_USERID, Registration.class);
+		query.setParameter("userId", getUserId());
+		query.setParameter("projectId", getProjectId());
+
+		List<Registration> result = query.getResultList();
+		if (result.size() > 1) {
+			// for all existing entry, need update the entry count
+			int newCount = result.size() - 1;
+
+			// only need set for others as this entry will be delete now
+			em.getTransaction().begin();
+			for (Registration reg : result) {
+				if (reg.getRegisterId() != getRegisterId())
+					reg.setEntriesCount(newCount);
+			}
+			em.getTransaction().commit();
+		}
+		em.close();
+	}
+	
+	/**
+	 * Promote the head from registration waiting list if it is not empty 
+	 */
+	public void tryPromoteOneFromWaitingList() {
+		getProject();
+		
+		if (project.isNeedApprove())
+			return;
+
+		TypedQuery<Registration> query;
+		getEntityManager();
+
+		if (project.getRegistrationLimit() == -1) {
+			query = em.createNamedQuery(REGISTRATION_FROM_WAITLIST_SUBPROJECT,  Registration.class);
+			query.setParameter("subProject", subProject);
+		} else {
+			query = em.createNamedQuery(REGISTRATION_FROM_WAITLIST,  Registration.class);
+		}
+		query.setParameter("projectId", projectId);
+		query.setMaxResults(1);
+
+		try {
+			Registration reg = query.getSingleResult();
+			// found one, directly change status,  not found, means waiting list is empty
+			if (reg != null) {
+				em.getTransaction().begin();
+				//as it will trigger the PreUpdate, so here need set the flag to ignore the check
+				reg.setActionFlag(ActionFlag.Others);
+				reg.setStatus(Status.Submitted);
+				// ??check send out email
+				em.getTransaction().commit();
+				em.close();
+			}
+		} catch (PersistenceException e) {
+			//normal case, no need log
+		}
+
+	}
+
+	public void checkLimitation() throws Exception {
+		if (actionFlag == ActionFlag.Others) {
+			return;
+		} else if ( actionFlag == ActionFlag.Cancel ) {
+			tryPromoteOneFromWaitingList();
+			return;
+		}
+
+		// first get the project information, then from that to check
+		if (!needCheckLimitation())
+			return;
+
+		// for cancel, need auto promote
+		if (isExceedLimitation()) {
+			if (project.isNeedApprove()) {
+				// by throw exception, so the approve know exceed
+				throw new Exception("Exceed registration limitation " + registrationLimit);
+			} else {
+				// change status to Waiting
+				setStatus(Status.Waiting);
+			}
+		}
+	}
+
+	@PrePersist
+	public void onPrePersist() throws Exception {
+		Util.debug("^^onPrePersist {}", toString());
+
+		setSubmitModifyTime();
+
+		// need update the entriesCount, so later can easy know the entries
+		// which create by some user for one project
+		getEntityManager();
+
+		Query query = em.createNamedQuery(REGISTRATION_BY_PROJECT_AND_USERID, Registration.class);
+		query.setParameter("userId", getUserId());
+		query.setParameter("projectId", getProjectId());
+
+		List<Registration> result = query.getResultList();
+		if (result.isEmpty()) {
+			// only one
+			setEntriesCount(1);
+		} else {
+			// for all existing entry, need update the entry count
+			int newCount = 1 + result.size();
+			setEntriesCount(newCount);
+
+			em.getTransaction().begin();
+			for (Registration reg : result) {
+				//reset the acton flag to pass the limitation check
+				reg.setActionFlag(ActionFlag.Others);
+				reg.setEntriesCount(newCount);
+			}
+			em.getTransaction().commit();
+		}
+		em.close();
+
+		if (status == Status.Submitted) {
+			checkLimitation();
+		}
+		
+		//clear flag to void affect next time logic
+		setActionFlag( ActionFlag.Others);
+	}
+
 	/**
 	 * @return the nationality
 	 */
@@ -123,12 +349,12 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param nationality the nationality to set
+	 * @param nationality
+	 *            the nationality to set
 	 */
 	public final void setNationality(String nationality) {
 		this.nationality = nationality;
 	}
-
 
 	/**
 	 * @return the club
@@ -138,13 +364,13 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param club the club to set
+	 * @param club
+	 *            the club to set
 	 */
 	public final void setClub(String club) {
 		this.club = club;
 	}
 
-	
 	/**
 	 * @return the phone
 	 */
@@ -153,7 +379,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param phone the phone to set
+	 * @param phone
+	 *            the phone to set
 	 */
 	public final void setPhone(String phone) {
 		this.phone = phone;
@@ -167,13 +394,12 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param email the email to set
+	 * @param email
+	 *            the email to set
 	 */
 	public final void setEmail(String email) {
 		this.email = email;
 	}
-
-	
 
 	/**
 	 * @return the tshirtSize
@@ -183,7 +409,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param tshirtSize the tshirtSize to set
+	 * @param tshirtSize
+	 *            the tshirtSize to set
 	 */
 	public final void setTshirtSize(String tshirtSize) {
 		this.tshirtSize = tshirtSize;
@@ -197,7 +424,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param submittedTime the submittedTime to set
+	 * @param submittedTime
+	 *            the submittedTime to set
 	 */
 	public final void setSubmittedTime(Date submittedTime) {
 		this.submittedTime = submittedTime;
@@ -211,104 +439,13 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param modifiedTime the modifiedTime to set
+	 * @param modifiedTime
+	 *            the modifiedTime to set
 	 */
 	public final void setModifiedTime(Date modifiedTime) {
 		this.modifiedTime = modifiedTime;
 	}
 
-	/**
-	 * @return the status
-	 */
-	public final String getStatus() {
-		return status;
-	}
-
-	/**
-	 * @param status the status to set
-	 */
-	public final void setStatus(String status) {
-		this.status = status;
-	}
-
-
-	public void setSubmitModifyTime() {
-		//here should ensure it only update once
-		if ( status.equals("Submitted")) {
-			if (submittedTime == null)
-				submittedTime = new Date();
-		}
-		
-		modifiedTime = new Date();
-	}
-	/**
-	 * @return the modifiedTime
-	 * @throws Exception 
-	 */
-	@PreUpdate
-	public void createUpdateModifiedTime() throws Exception {
-		Util.debug("^^preUpdate {}", toString());
-		setSubmitModifyTime();
-	}
-	
-	@PreRemove
-	public void onPreRemove() {
-		//need update the entriesCount,  so later can easy know the entries which create by some user for one project
-		getEntityManager();
-		
-		Query query = em.createNamedQuery(REGISTRATION_BY_PROJECT_AND_USERID, Registration.class);
-		query.setParameter("userId", getUserId());
-		query.setParameter("projectId", getProjectId());
-		
-		List<Registration> result = query.getResultList();
-		if ( result.size() >1) {
-			//for all existing entry, need update the entry count
-			int newCount = result.size() -1;
-			
-			//only need set for others as this entry will be delete now 
-			em.getTransaction().begin();
-			for ( Registration reg : result) {
-				if ( reg.getRegisterId() != getRegisterId())
-					reg.setEntriesCount(newCount);
-			}
-			em.getTransaction().commit();
-		}
-		em.close();
-	}
-	
-	@PrePersist 
-	public void onPrePersist() {
-		Util.debug("^^onPrePersist {}", toString());
-		
-		setSubmitModifyTime();
-		
-		//need update the entriesCount,  so later can easy know the entries which create by some user for one project
-		getEntityManager();
-		
-		Query query = em.createNamedQuery(REGISTRATION_BY_PROJECT_AND_USERID, Registration.class);
-		query.setParameter("userId", getUserId());
-		query.setParameter("projectId", getProjectId());
-		
-		List<Registration> result = query.getResultList();
-		if ( result.isEmpty()) {
-			//only one 
-			setEntriesCount(1);
-		} else {
-			//for all existing entry, need update the entry count
-			int newCount = 1 + result.size();
-			setEntriesCount(newCount);
-			
-			em.getTransaction().begin();
-			for ( Registration reg : result) {
-				reg.setEntriesCount(newCount);
-			}
-			em.getTransaction().commit();
-		}
-		em.close();
-		
-	}
-	
-	
 	/**
 	 * @return the rejectReason
 	 */
@@ -317,7 +454,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param rejectReason the rejectReason to set
+	 * @param rejectReason
+	 *            the rejectReason to set
 	 */
 	public final void setRejectReason(String rejectReason) {
 		this.rejectReason = rejectReason;
@@ -331,13 +469,12 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param cancelReason the cancelReason to set
+	 * @param cancelReason
+	 *            the cancelReason to set
 	 */
 	public final void setCancelReason(String cancelReason) {
 		this.cancelReason = cancelReason;
 	}
-	
-	
 
 	/**
 	 * @return the age
@@ -347,13 +484,12 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param age the age to set
+	 * @param age
+	 *            the age to set
 	 */
 	public final void setAge(int age) {
 		this.age = age;
 	}
-
-	
 
 	/**
 	 * @return the department
@@ -363,13 +499,13 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param department the department to set
+	 * @param department
+	 *            the department to set
 	 */
 	public final void setDepartment(String department) {
 		this.department = department;
 	}
 
-	
 	/**
 	 * @return the location
 	 */
@@ -378,7 +514,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param location the location to set
+	 * @param location
+	 *            the location to set
 	 */
 	public final void setLocation(String location) {
 		this.location = location;
@@ -392,7 +529,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param registerId the registerId to set
+	 * @param registerId
+	 *            the registerId to set
 	 */
 	public final void setRegisterId(long registerId) {
 		this.registerId = registerId;
@@ -406,7 +544,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param projectId the projectId to set
+	 * @param projectId
+	 *            the projectId to set
 	 */
 	public final void setProjectId(long projectId) {
 		this.projectId = projectId;
@@ -420,7 +559,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param sapUserId the sapUserId to set
+	 * @param sapUserId
+	 *            the sapUserId to set
 	 */
 	public final void setUserId(String userId) {
 		this.userId = userId;
@@ -429,15 +569,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	/**
 	 * @return the sapName
 	 */
-	public final String getSapUserName() {
-		return sapUserName;
-	}
-
-	/**
-	 * @param sapName the sapName to set
-	 */
-	public final void setSapUserName(String sapName) {
-		this.sapUserName = sapName;
+	public final String getUserName() {
+		return userName;
 	}
 
 	/**
@@ -448,7 +581,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param idOrPassort the idOrPassort to set
+	 * @param idOrPassort
+	 *            the idOrPassort to set
 	 */
 	public final void setIdOrPassort(String idOrPassort) {
 		this.idOrPassort = idOrPassort;
@@ -462,7 +596,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param gender the gender to set
+	 * @param gender
+	 *            the gender to set
 	 */
 	public final void setGender(String gender) {
 		this.gender = gender;
@@ -476,7 +611,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param name the name to set
+	 * @param name
+	 *            the name to set
 	 */
 	public final void setName(String name) {
 		this.name = name;
@@ -490,7 +626,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr0 the attr0 to set
+	 * @param attr0
+	 *            the attr0 to set
 	 */
 	public final void setAttr0(String attr0) {
 		this.attr0 = attr0;
@@ -504,7 +641,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr1 the attr1 to set
+	 * @param attr1
+	 *            the attr1 to set
 	 */
 	public final void setAttr1(String attr1) {
 		this.attr1 = attr1;
@@ -518,7 +656,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr2 the attr2 to set
+	 * @param attr2
+	 *            the attr2 to set
 	 */
 	public final void setAttr2(String attr2) {
 		this.attr2 = attr2;
@@ -532,7 +671,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr3 the attr3 to set
+	 * @param attr3
+	 *            the attr3 to set
 	 */
 	public final void setAttr3(String attr3) {
 		this.attr3 = attr3;
@@ -546,7 +686,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr4 the attr4 to set
+	 * @param attr4
+	 *            the attr4 to set
 	 */
 	public final void setAttr4(String attr4) {
 		this.attr4 = attr4;
@@ -560,7 +701,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr5 the attr5 to set
+	 * @param attr5
+	 *            the attr5 to set
 	 */
 	public final void setAttr5(String attr5) {
 		this.attr5 = attr5;
@@ -574,7 +716,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr6 the attr6 to set
+	 * @param attr6
+	 *            the attr6 to set
 	 */
 	public final void setAttr6(String attr6) {
 		this.attr6 = attr6;
@@ -588,7 +731,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr7 the attr7 to set
+	 * @param attr7
+	 *            the attr7 to set
 	 */
 	public final void setAttr7(String attr7) {
 		this.attr7 = attr7;
@@ -602,7 +746,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr8 the attr8 to set
+	 * @param attr8
+	 *            the attr8 to set
 	 */
 	public final void setAttr8(String attr8) {
 		this.attr8 = attr8;
@@ -616,7 +761,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr9 the attr9 to set
+	 * @param attr9
+	 *            the attr9 to set
 	 */
 	public final void setAttr9(String attr9) {
 		this.attr9 = attr9;
@@ -630,7 +776,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param fileName0 the fileName0 to set
+	 * @param fileName0
+	 *            the fileName0 to set
 	 */
 	public final void setFileName0(String fileName0) {
 		this.fileName0 = fileName0;
@@ -644,7 +791,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param fileName1 the fileName1 to set
+	 * @param fileName1
+	 *            the fileName1 to set
 	 */
 	public final void setFileName1(String fileName1) {
 		this.fileName1 = fileName1;
@@ -658,7 +806,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param fileName2 the fileName2 to set
+	 * @param fileName2
+	 *            the fileName2 to set
 	 */
 	public final void setFileName2(String fileName2) {
 		this.fileName2 = fileName2;
@@ -672,7 +821,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param fileName3 the fileName3 to set
+	 * @param fileName3
+	 *            the fileName3 to set
 	 */
 	public final void setFileName3(String fileName3) {
 		this.fileName3 = fileName3;
@@ -686,7 +836,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param fileName4 the fileName4 to set
+	 * @param fileName4
+	 *            the fileName4 to set
 	 */
 	public final void setFileName4(String fileName4) {
 		this.fileName4 = fileName4;
@@ -700,7 +851,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr10 the attr10 to set
+	 * @param attr10
+	 *            the attr10 to set
 	 */
 	public final void setAttr10(String attr10) {
 		this.attr10 = attr10;
@@ -714,7 +866,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr11 the attr11 to set
+	 * @param attr11
+	 *            the attr11 to set
 	 */
 	public final void setAttr11(String attr11) {
 		this.attr11 = attr11;
@@ -728,7 +881,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr12 the attr12 to set
+	 * @param attr12
+	 *            the attr12 to set
 	 */
 	public final void setAttr12(String attr12) {
 		this.attr12 = attr12;
@@ -742,7 +896,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr13 the attr13 to set
+	 * @param attr13
+	 *            the attr13 to set
 	 */
 	public final void setAttr13(String attr13) {
 		this.attr13 = attr13;
@@ -756,7 +911,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr14 the attr14 to set
+	 * @param attr14
+	 *            the attr14 to set
 	 */
 	public final void setAttr14(String attr14) {
 		this.attr14 = attr14;
@@ -770,7 +926,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr15 the attr15 to set
+	 * @param attr15
+	 *            the attr15 to set
 	 */
 	public final void setAttr15(String attr15) {
 		this.attr15 = attr15;
@@ -784,7 +941,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr16 the attr16 to set
+	 * @param attr16
+	 *            the attr16 to set
 	 */
 	public final void setAttr16(String attr16) {
 		this.attr16 = attr16;
@@ -798,7 +956,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr17 the attr17 to set
+	 * @param attr17
+	 *            the attr17 to set
 	 */
 	public final void setAttr17(String attr17) {
 		this.attr17 = attr17;
@@ -812,7 +971,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr18 the attr18 to set
+	 * @param attr18
+	 *            the attr18 to set
 	 */
 	public final void setAttr18(String attr18) {
 		this.attr18 = attr18;
@@ -826,7 +986,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param attr19 the attr19 to set
+	 * @param attr19
+	 *            the attr19 to set
 	 */
 	public final void setAttr19(String attr19) {
 		this.attr19 = attr19;
@@ -840,7 +1001,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param birthdate the birthdate to set
+	 * @param birthdate
+	 *            the birthdate to set
 	 */
 	public final void setBirthdate(String birthdate) {
 		this.birthdate = birthdate;
@@ -854,7 +1016,8 @@ public class Registration extends BaseModel  implements ServiceConstant{
 	}
 
 	/**
-	 * @param entriesCount the entriesCount to set
+	 * @param entriesCount
+	 *            the entriesCount to set
 	 */
 	public final void setEntriesCount(int entriesCount) {
 		this.entriesCount = entriesCount;
@@ -867,7 +1030,75 @@ public class Registration extends BaseModel  implements ServiceConstant{
 		sb.append(" RegisterId:");
 		sb.append(getRegisterId());
 		sb.append(" idOrPassord:");
-		sb.append( getIdOrPassort());
+		sb.append(getIdOrPassort());
 		return sb.toString();
+	}
+
+	/**
+	 * @return the subPrject
+	 */
+	public final String getSubPrject() {
+		return subProject;
+	}
+
+	/**
+	 * @param subPrject
+	 *            the subPrject to set
+	 */
+	public final void setSubPrject(String subProject) {
+		this.subProject = subProject;
+	}
+
+	/**
+	 * @return the subProject
+	 */
+	public final String getSubProject() {
+		return subProject;
+	}
+
+	/**
+	 * @param subProject
+	 *            the subProject to set
+	 */
+	public final void setSubProject(String subProject) {
+		this.subProject = subProject;
+	}
+
+	/**
+	 * @param userName
+	 *            the userName to set
+	 */
+	public final void setUserName(String userName) {
+		this.userName = userName;
+	}
+
+	/**
+	 * @return the status
+	 */
+	public final Status getStatus() {
+		return status;
+	}
+
+	/**
+	 * @param status
+	 *            the status to set
+	 */
+	public final void setStatus(Status status) {
+		this.status = status;
+	}
+
+	/**
+	 * @return the actionFlag
+	 */
+	public final ActionFlag getActionFlag() {
+		return actionFlag;
+	}
+
+	/**
+	 * @param actionFlag
+	 *            the actionFlag to set
+	 */
+	public final void setActionFlag(ActionFlag actionFlag) {
+		this.actionFlag = actionFlag;
 	}
 }
