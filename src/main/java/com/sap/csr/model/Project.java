@@ -2,6 +2,8 @@ package com.sap.csr.model;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -15,6 +17,7 @@ import javax.persistence.PreUpdate;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import com.sap.csr.odata.JsonUtility;
 import com.sap.csr.odata.ServiceConstant;
 import com.sap.csr.odata.UserMng;
 
@@ -47,6 +50,10 @@ public class Project implements Serializable {
 	@Temporal(TemporalType.TIMESTAMP)
 	private Date modifiedTime;
 
+	//startDate, startTime, endDate, endTime, now just use one json format to store in order to easy adjust the format 
+	private String  startDate, startTime, endDate,endTime;
+	private String location, status;
+	
 	//for approve and email
 	private boolean needApprove = false;  
 	private boolean needEmailNotification = false; //depend on need approve
@@ -72,11 +79,13 @@ public class Project implements Serializable {
 	
 	//sub-project information
 	private long registrationLimit = 0;  //register limit for registration:  -1 means sub-project, 0 means no limiation, >0 means normal limiation
-	@Column(name = "subProjectInfo", length = 2000)
-	String subProjectInfo;
-	
-	@Column(name = "subProjectLimit", length = 1000)
-	String subProjectLimit;
+	@Column(name = "subProjectInfo", length = 4000)
+	String subProjectInfo;  //complex information
+	String subProjectTitle; //title show as label for select sub-project
+
+	transient List<Map<String, Object>> subProjectList;
+//	@Column(name = "subProjectLimit", length = 1000)
+//	String subProjectLimit;
 	
 	/**
 	 * Get the limit of the sub-project, 0 means no limitation
@@ -84,7 +93,21 @@ public class Project implements Serializable {
 	 * @return
 	 */
 	public long getLimitForSubProject(String subProject) throws Exception {
-		String []aInfo = subProjectInfo.split(";");
+		if (subProjectList == null) {
+			subProjectList = JsonUtility.readMapArrayFromString(subProjectInfo);
+		}
+		for (Map<String, Object> map : subProjectList) {
+			String info = (String) map.get("info");
+			if (info.equals(subProject)) {
+				String limit = (String) map.get("limit");
+				if (limit == null || limit.length() == 0)
+					return 0;
+				else
+					return Long.parseLong(limit);
+			}
+		}
+		return 0;
+		/*	String []aInfo = subProjectInfo.split(";");
 		String []aLimit = subProjectLimit.split(";");
 		if ( aInfo.length != aLimit.length)
 			throw new Exception("Project content wrong: subProjectInfo not consiste with subProjectLimit");
@@ -100,7 +123,7 @@ public class Project implements Serializable {
 			i++;
 		}
 		
-		return 0;
+		return 0;*/
 	}
 	
 	/**
@@ -467,18 +490,18 @@ public class Project implements Serializable {
 	public final void setSubProjectInfo(String subProjectInfo) {
 		this.subProjectInfo = subProjectInfo;
 	}
-	/**
-	 * @return the subProjectLimit
-	 */
-	public final String getSubProjectLimit() {
-		return subProjectLimit;
-	}
-	/**
-	 * @param subProjectLimit the subProjectLimit to set
-	 */
-	public final void setSubProjectLimit(String subProjectLimit) {
-		this.subProjectLimit = subProjectLimit;
-	}
+//	/**
+//	 * @return the subProjectLimit
+//	 */
+//	public final String getSubProjectLimit() {
+//		return subProjectLimit;
+//	}
+//	/**
+//	 * @param subProjectLimit the subProjectLimit to set
+//	 */
+//	public final void setSubProjectLimit(String subProjectLimit) {
+//		this.subProjectLimit = subProjectLimit;
+//	}
 	/**
 	 * @return the registrationLimit
 	 */
@@ -490,6 +513,105 @@ public class Project implements Serializable {
 	 */
 	public final void setRegistrationLimit(long registrationLimit) {
 		this.registrationLimit = registrationLimit;
+	}
+
+	
+	/**
+	 * @return the location
+	 */
+	public final String getLocation() {
+		return location;
+	}
+
+	/**
+	 * @param location the location to set
+	 */
+	public final void setLocation(String location) {
+		this.location = location;
+	}
+
+	/**
+	 * @return the startDate
+	 */
+	public final String getStartDate() {
+		return startDate;
+	}
+
+	/**
+	 * @param startDate the startDate to set
+	 */
+	public final void setStartDate(String startDate) {
+		this.startDate = startDate;
+	}
+
+	/**
+	 * @return the startTime
+	 */
+	public final String getStartTime() {
+		return startTime;
+	}
+
+	/**
+	 * @param startTime the startTime to set
+	 */
+	public final void setStartTime(String startTime) {
+		this.startTime = startTime;
+	}
+
+	/**
+	 * @return the endDate
+	 */
+	public final String getEndDate() {
+		return endDate;
+	}
+
+	/**
+	 * @param endDate the endDate to set
+	 */
+	public final void setEndDate(String endDate) {
+		this.endDate = endDate;
+	}
+
+	/**
+	 * @return the endTime
+	 */
+	public final String getEndTime() {
+		return endTime;
+	}
+
+	/**
+	 * @param endTime the endTime to set
+	 */
+	public final void setEndTime(String endTime) {
+		this.endTime = endTime;
+	}
+
+	/**
+	 * @return the subProjectTitle
+	 */
+	public final String getSubProjectTitle() {
+		return subProjectTitle;
+	}
+
+	/**
+	 * @param subProjectTitle the subProjectTitle to set
+	 */
+	public final void setSubProjectTitle(String subProjectTitle) {
+		this.subProjectTitle = subProjectTitle;
+	}
+
+	/**
+	 * @return the status
+	 */
+	public final String getStatus() {
+		return status;
+	}
+
+	/**
+	 * @param status the status to set
+	 */
+	public final void setStatus(String status) {
+		this.status = status;
 	}
 		
 }
