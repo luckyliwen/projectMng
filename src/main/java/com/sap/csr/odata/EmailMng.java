@@ -9,12 +9,15 @@ import java.util.Formatter;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import javax.annotation.Resource;
 import javax.mail.MessagingException;
 import javax.mail.Session;
 import javax.mail.Transport;
 import javax.mail.Message.RecipientType;
+import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
@@ -28,6 +31,8 @@ import org.slf4j.LoggerFactory;
 
 import com.sap.core.connectivity.api.configuration.ConnectivityConfiguration;
 import com.sap.core.connectivity.api.configuration.DestinationConfiguration;
+import com.sap.olingoHelper.EmailManage;
+import com.sap.olingoHelper.Message;
 
 
 
@@ -37,6 +42,35 @@ public class EmailMng implements ServiceConstant  {
 	
 	 private static final Logger LOGGER = LoggerFactory.getLogger(EmailMng.class);
 	
+	 static private Session mailSession = null;
+	    static InternetAddress fromAddress = null;
+		public static BlockingQueue<Message> blockQueue = null;
+		
+		private Transport transport = null;
+	        
+	    static {
+			try {
+				//SAPHCPFinOps-notify@sap.com =>SAPHCPFinOps-notify@mail.hana.ondemand.com
+				InternetAddress[] address = InternetAddress.parse("SAPHCPFinOps-notify@sap.com");
+				fromAddress = address[0];
+				
+				InitialContext ctx = new InitialContext();
+				//mail/SAPInternalNWCloudSession  SAPCCPEmail
+				mailSession = (Session)ctx.lookup("java:comp/env/mail/SAPInternalNWCloudSession");
+				
+//				logger.error("init EmailManage here!!!");
+			} catch (NamingException e) {
+				// TODO Auto-generated catch block
+				logger.error("Get mail session error", e);
+			} catch (AddressException addressException) {
+				logger.error("Get from address failure", addressException);
+			}
+		
+	    	blockQueue = new LinkedBlockingQueue<>();
+	    	Thread thread = new Thread(new EmailManage());
+	    	thread.start();
+	    }
+	    
 	 public EmailMng() {
 		
 	}
@@ -131,6 +165,20 @@ public class EmailMng implements ServiceConstant  {
 
 	}
 	
+	
+	public void run() {
+		Message message;
+		while (true) {
+			try {
+				message = blockQueue.take();
+				doSendEmail(message.getTo(), message.getSubject(), message.getBody());
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+	
 	public boolean sendEmail(String to, String subject, String body) throws Exception {
 		Transport transport = null;
         try {
@@ -145,6 +193,7 @@ public class EmailMng implements ServiceConstant  {
 //            mimeMessage.setFrom(fromAddress[0]);
             mimeMessage.setRecipients(RecipientType.TO, toAddresses);
             mimeMessage.setSubject(subject, "UTF-8");
+            
             MimeMultipart multiPart = new MimeMultipart("alternative");
             MimeBodyPart part = new MimeBodyPart();
             
@@ -153,6 +202,9 @@ public class EmailMng implements ServiceConstant  {
     
             part.setText(sb.toString(), "utf-8", "plain");
             multiPart.addBodyPart(part);
+            
+            //also add the attachment if have 
+            
             mimeMessage.setContent(multiPart);
 
             // Send mail
