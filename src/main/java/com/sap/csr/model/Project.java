@@ -217,11 +217,12 @@ public class Project implements Serializable {
 	/**
 	 * 
 	 * @param reg
-	 * @param reject: true means reject, otherwise means submitted success or approved
-	 * @return
+	 * @param success: true means approve/submit, otherwise means rejected
+	 * 
+	 *  * @return
 	 */
-	public String createEmailSubject(Registration reg, boolean reject) {
-		String subject = reject ? emailRejectSubject : emailApproveSubject;
+	public String createEmailSubject(boolean success, Registration reg) {
+		String subject = success ?  emailApproveSubject : emailRejectSubject;
 		return createEmailTemplateContent(subject, reg);
 	}
 	
@@ -247,7 +248,7 @@ public class Project implements Serializable {
 			body = emailRejectBody;
 		}
 		String bodyPart = createEmailTemplateContent(body, reg);
-		return bodyPart + emailSignature;
+		return bodyPart + "\r\n" +  emailSignature;
 	}
 	
 	public String  createICalendarContent(String subProject) throws Exception{

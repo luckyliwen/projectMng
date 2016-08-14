@@ -186,7 +186,7 @@ public class Registration extends BaseModel implements ServiceConstant {
 		} catch(Exception e) {
 			logger.error("project.createICalendarContent error", e);
 		}
-		String subject = project.createEmailSubject(this, flag);
+		String subject = project.createEmailSubject(flag, this);
 		EmailMessage msg = new EmailMessage(email,  subject, body);
 		if (calendar!=null)
 			msg.setAttachment("Event of " + project.getTitle() + ".ics", calendar);
