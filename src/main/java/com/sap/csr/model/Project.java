@@ -60,7 +60,8 @@ public class Project implements Serializable {
 	//startDate, startTime, endDate, endTime, now just use one json format to store in order to easy adjust the format 
 	private String  eventStartDateTime, eventEndDateTime, 
 		regStartDateTime, regEndDateTime;
-	
+	//the timezone offset get from JavaScript, for china, +8, value is -480 ( 8hour = 8*60m)
+	private int  timezoneOffset;  
 	private String location, status;
 	
 	//for approve and email
@@ -256,7 +257,7 @@ public class Project implements Serializable {
 		
 		//depend on whether need get the sub-project or not, it will get different start/end time
 		if ( subProject == null || subProject.length()==0) {
-			cal.setDuration(  eventStartDateTime, eventEndDateTime);
+			cal.setDuration(  eventStartDateTime, eventEndDateTime,timezoneOffset);
 			cal.setLocation(location);
 			cal.setTitle(title);
 			cal.setSubject("Event of " + title);
@@ -272,7 +273,7 @@ public class Project implements Serializable {
 				if ( subEnd != null && subEnd.length()>0) {
 					end = subEnd;
 				}
-				cal.setDuration(  start, end);
+				cal.setDuration(  start, end, timezoneOffset);
 				cal.setTitle(title);
 				cal.setSubject("Event of " + title + " " + (String)map.get("info"));
 				
@@ -843,6 +844,20 @@ public class Project implements Serializable {
 	 */
 	public final void setOwnerEmail(String ownerEmail) {
 		this.ownerEmail = ownerEmail;
+	}
+
+	/**
+	 * @return the timezoneOffset
+	 */
+	public final int getTimezoneOffset() {
+		return timezoneOffset;
+	}
+
+	/**
+	 * @param timezoneOffset the timezoneOffset to set
+	 */
+	public final void setTimezoneOffset(int timezoneOffset) {
+		this.timezoneOffset = timezoneOffset;
 	}
 		
 }
