@@ -339,10 +339,16 @@ public class CSRProcessor implements ServiceConstant {
 			returnType = @ReturnType(type = Type.SIMPLE, isCollection = false) )
 	public boolean TestEmail(@EdmFunctionImportParameter(name = "To") String to, 
 			@EdmFunctionImportParameter(name = "Subject") String subject,
-			@EdmFunctionImportParameter(name = "Body") String body) throws ODataException{
-		EmailMng email = new EmailMng();
+			@EdmFunctionImportParameter(name = "Body") String body,
+			@EdmFunctionImportParameter(name = "Attachment") String attachment
+			) throws ODataException
+	{
+	
 		try {
-			return email.sendEmail(to, subject, body);
+			EmailMessage msg = new EmailMessage(to, subject,body);
+			if ( attachment.length()>0)
+				msg.setAttachment("TestAttachment.txt", attachment);
+			return EmailMng.sendEmail(msg);
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

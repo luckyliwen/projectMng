@@ -20,6 +20,10 @@
 		<res-type>com.sap.core.connectivity.api.configuration.ConnectivityConfiguration</res-type>
 	</resource-ref>
 	
+	<resource-ref>
+    	<res-ref-name>mail/EmailSession</res-ref-name>
+    	<res-type>javax.mail.Session</res-type>
+	</resource-ref>
 
 	<!-- ============================================================== -->
 	<!-- Welcome file list -->
@@ -29,7 +33,7 @@
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
 
-	<servlet>
+	<!-- <servlet>
 		<servlet-name>ODataServlet</servlet-name>
 		<servlet-class>org.apache.cxf.jaxrs.servlet.CXFNonSpringJaxrsServlet</servlet-class>
 		<init-param>
@@ -45,8 +49,23 @@
 	<servlet-mapping>
 		<servlet-name>ODataServlet</servlet-name>
 		<url-pattern>/ODataSrv/*</url-pattern>
-	</servlet-mapping>
+	</servlet-mapping> -->
 	
+	
+	<servlet>
+    <servlet-name>ODataServiceServlet</servlet-name>
+    <servlet-class>org.apache.olingo.odata2.core.servlet.ODataServlet</servlet-class>
+    <init-param>
+      <param-name>org.apache.olingo.odata2.service.factory</param-name>
+      <param-value>com.sap.csr.odata.ServiceFactory</param-value>
+    </init-param>
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>ODataServiceServlet</servlet-name>
+    <url-pattern>/ODataSrv/*</url-pattern>
+  </servlet-mapping>
+  
     
     <!-- attachment -->
     <servlet>

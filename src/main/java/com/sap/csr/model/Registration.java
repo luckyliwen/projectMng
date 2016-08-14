@@ -25,6 +25,8 @@ import javax.persistence.PreRemove;
 import javax.persistence.PreUpdate;
 import javax.persistence.Query;
 
+import com.sap.csr.odata.EmailMessage;
+import com.sap.csr.odata.EmailMng;
 import com.sap.csr.odata.ServiceConstant;
 import com.sap.csr.odata.Util;  
 
@@ -91,7 +93,7 @@ public class Registration extends BaseModel implements ServiceConstant {
 	private String fileName0, fileName1, fileName2, fileName3, fileName4;
 
 	public enum ActionFlag {
-		Submit, Approve, Cancel, Others
+		Submit, Approve, Reject,Promote,Cancel, Others
 	};
 
 	// For the approve/submit we need check whether it exceed the limitation, so
@@ -138,6 +140,7 @@ public class Registration extends BaseModel implements ServiceConstant {
 	public void onPreUpdate() throws Exception {
 		setSubmitModifyTime();
 		checkLimitation();
+		
 		//reset flag to void affect next time check
 		setActionFlag( ActionFlag.Others);
 	}
@@ -155,7 +158,43 @@ public class Registration extends BaseModel implements ServiceConstant {
 			project = (Project) query.getSingleResult();
 		}
 	}
-
+	
+	public String getTemplateValue(String name) {
+		if (name.equals("UserName")) {
+			return userName;
+		} else if (name.equals("RejectReason")){
+			return rejectReason;
+		} else {
+			return "";
+		}
+	}
+	
+//	EmailApproveSubject : "Congratulations, your registration ${Title} has been submitted successful",
+//	EmailApproveBody: "Hello ${UserName},\r\n" +
+//			"\tYour registration ${Title} has been submitted.",
+//	EmailSignature: "Best Regards,\r\nSAP Labs China"
+		
+	public void sendEmailNotification() {
+		getProject();
+		boolean flag = (status == Status.Approved || status == Status.Submitted)  ? true : false;
+		String body = project.createEmailBody(flag, this );
+		
+		String calendar = null;
+		try {
+			if (flag)
+				calendar = project.createICalendarContent(subProject);
+		} catch(Exception e) {
+			logger.error("project.createICalendarContent error", e);
+		}
+		String subject = project.createEmailSubject(this, flag);
+		EmailMessage msg = new EmailMessage(email,  subject, body);
+		if (calendar!=null)
+			msg.setAttachment("Event of " + project.getTitle() + ".ics", calendar);
+		
+		EmailMng.sendEmail(msg);
+	}
+	
+	
 	/**
 	 * Only care about the registrationLimit, not considerate the needApprove
 	 * 
@@ -207,8 +246,13 @@ public class Registration extends BaseModel implements ServiceConstant {
 
 		if (count >= registrationLimit)
 			return true;
-		else
+		else {
+			if ( count == registrationLimit-1){
+				//just meet the maximun, notify author 
+				project.sendFullRegistrationNotify(this);
+			}
 			return false;
+		}
 	}
 
 	@PreRemove
@@ -240,11 +284,11 @@ public class Registration extends BaseModel implements ServiceConstant {
 	/**
 	 * Promote the head from registration waiting list if it is not empty 
 	 */
-	public void tryPromoteOneFromWaitingList() {
+	public boolean tryPromoteOneFromWaitingList() {
 		getProject();
 		
 		if (project.isNeedApprove())
-			return;
+			return false;
 
 		TypedQuery<Registration> query;
 		getEntityManager();
@@ -269,24 +313,40 @@ public class Registration extends BaseModel implements ServiceConstant {
 				// ??check send out email
 				em.getTransaction().commit();
 				em.close();
+				return true;
 			}
 		} catch (PersistenceException e) {
 			//normal case, no need log
 		}
+		
+		return false;
 
 	}
 
 	public void checkLimitation() throws Exception {
 		if (actionFlag == ActionFlag.Others) {
 			return;
-		} else if ( actionFlag == ActionFlag.Cancel ) {
-			tryPromoteOneFromWaitingList();
+		} else if ( actionFlag == ActionFlag.Promote) {
+			//now not check, admin have more power! and he can adjust the number by himself
+			sendEmailNotification();
+		}
+		else if ( actionFlag == ActionFlag.Cancel ) {
+			//as the cancel only happend on few time, so send email to owner
+			getProject();
+			boolean success =  tryPromoteOneFromWaitingList();
+			project.sendCancelNotify(this, success);
+			return;
+		} else if (actionFlag == ActionFlag.Reject) {
+			sendEmailNotification();
 			return;
 		}
 
 		// first get the project information, then from that to check
-		if (!needCheckLimitation())
+		if (!needCheckLimitation()) {
+			//send email for submitted
+			sendEmailNotification();
 			return;
+		} 
 
 		// for cancel, need auto promote
 		if (isExceedLimitation()) {
@@ -297,6 +357,9 @@ public class Registration extends BaseModel implements ServiceConstant {
 				// change status to Waiting
 				setStatus(Status.Waiting);
 			}
+		} else {
+			//ok, send email for submit 
+			sendEmailNotification();
 		}
 	}
 

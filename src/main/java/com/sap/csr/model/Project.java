@@ -1,5 +1,6 @@
 package com.sap.csr.model;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
@@ -16,7 +17,11 @@ import javax.persistence.PreRemove;
 import javax.persistence.PreUpdate;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
+import javax.activation.DataSource;
 
+import com.sap.csr.odata.EmailMessage;
+import com.sap.csr.odata.EmailMng;
+import com.sap.csr.odata.ICalendar;
 import com.sap.csr.odata.JsonUtility;
 import com.sap.csr.odata.ServiceConstant;
 import com.sap.csr.odata.UserMng;
@@ -31,7 +36,9 @@ public class Project implements Serializable {
 	@Id  @GeneratedValue
     private long projectId;
 	
-	private String author="";  //auto set to the people who create the project
+	private String owner = "";  //auto set to the people who create the project
+	private String ownerEmail = "";
+	
 	@Column(name="administrator", length= 1000)
 	private String administrator; //the people will have have permission to edit/mng project
 	
@@ -51,12 +58,14 @@ public class Project implements Serializable {
 	private Date modifiedTime;
 
 	//startDate, startTime, endDate, endTime, now just use one json format to store in order to easy adjust the format 
-	private String  startDate, startTime, endDate,endTime;
+	private String  eventStartDateTime, eventEndDateTime, 
+		regStartDateTime, regEndDateTime;
+	
 	private String location, status;
 	
 	//for approve and email
 	private boolean needApprove = false;  
-	private boolean needEmailNotification = false; //depend on need approve
+	private boolean needEmailNotification = true; //now all will send email as need save in calendar
 	 
 	private boolean allowCancel = false; 
 	
@@ -86,6 +95,224 @@ public class Project implements Serializable {
 	transient List<Map<String, Object>> subProjectList;
 //	@Column(name = "subProjectLimit", length = 1000)
 //	String subProjectLimit;
+	
+	//!!following content need adjust
+	public String createICalendarContent() {
+		StringBuffer sb = new StringBuffer(100);
+		sb.append("Welcome to join the event of " + title);
+		return sb.toString();
+	}
+	
+	public void sendFullRegistrationNotify(Registration reg) {
+		//first create the subject, as it can be used as in body 
+		String subject = "The registration of ";
+		subject += title;
+		if (reg.getSubProject()!= null && reg.getSubPrject().length()>0) {
+			subject += " -- ";
+			subject += reg.getSubPrject();
+		}
+		subject += " has reach the maximum number now!";
+		
+		StringBuffer sb = new StringBuffer(50);
+		sb.append("Hello\r\n\t");
+		sb.append(subject);
+		sb.append("\r\nBest Regards");
+		
+		EmailMessage msg = new EmailMessage(ownerEmail, subject, sb.toString());
+		EmailMng.sendEmail(msg);
+	}
+	
+	/**
+	 * 
+	 * @param reg
+	 * @param promoteFlag: true means promote one from waiting list successful
+	 */
+	public void sendCancelNotify(Registration reg, boolean promoteFlag) {
+		//first create the subject, as it can be used as in body 
+		String subject = "Registration of ";
+		subject += title;
+		if (reg.getSubProject()!= null && reg.getSubPrject().length()>0) {
+			subject += " -- ";
+			subject += reg.getSubPrject();
+		}
+		subject += " from ";
+		subject += reg.getUserName();
+		subject += " (ID:";
+		subject += reg.getUserId();
+		subject += ") ";
+		
+		subject += " has been canceled";
+		
+		StringBuffer sb = new StringBuffer(50);
+		sb.append("Hello\r\n\t");
+		sb.append(subject);
+		if (promoteFlag) {
+			sb.append("\tAnd it promoted one from the waiting list successfully");
+		}
+		sb.append("\r\nBest Regards");
+		
+		EmailMessage msg = new EmailMessage(ownerEmail, subject, sb.toString());
+		EmailMng.sendEmail(msg);
+	}
+	
+	/**
+	 * Get the real value by the template name, now support Title, UserName
+	 * @param name
+	 * @param reg
+	 * @return
+	 */
+	public String getTemplateValue(String name, Registration reg) {
+		if (name.equals("Title")) {
+			return title;
+		} else {
+			return reg.getTemplateValue(name);
+		}
+	}
+	
+	public String getEmailSubject(boolean success,Registration reg) {
+		String subject;
+		if (success) {
+			subject = emailApproveSubject;
+		} else {
+			subject = emailRejectSubject;
+		}
+		return createEmailTemplateContent(subject, reg);
+	}
+	
+	
+	public String createEmailTemplateContent(String templateStr, Registration reg) {
+		String template = templateStr;
+		//??project owner need ensure the template have content
+		if (template == null)
+			return "";
+		
+		StringBuffer sb = new StringBuffer(200);
+		//just replace all the ${ to corresponding value 
+		while (true) {
+			int pos = template.indexOf("${");
+			if (pos == -1) {
+				sb.append(template);
+				break;
+			} else {
+				//find the next },  and 
+				int endPos = template.indexOf("}", pos);
+				if (endPos == -1) {
+					sb.append(template);
+					break;
+				} else {
+					//append previous part,  use value from Registration to replace, for the remain part then continue
+					String matchName = template.substring(pos+2, endPos);
+					
+					sb.append(template.substring(0, pos));
+					
+					sb.append(  getTemplateValue(matchName, reg));
+					
+					template = template.substring(endPos+1);
+				}
+			}
+		}
+		return sb.toString();
+	}
+	
+	/**
+	 * 
+	 * @param reg
+	 * @param reject: true means reject, otherwise means submitted success or approved
+	 * @return
+	 */
+	public String createEmailSubject(Registration reg, boolean reject) {
+		String subject = reject ? emailRejectSubject : emailApproveSubject;
+		return createEmailTemplateContent(subject, reg);
+	}
+	
+	
+	/**
+	 * 
+	 * @param success : true means submitted or approved, just get the template
+	 * @return
+	 */
+	public String createEmailBody(boolean success, Registration reg) {
+		if (!needEmailNotification)
+			return null;
+		
+//		EmailApproveSubject : "Congratulations, your registration ${Title} has been submitted successful",
+//		EmailApproveBody: "Hello ${UserName},\r\n" +
+//				"\tYour registration ${Title} has been submitted.",
+//		EmailSignature: "Best Regards,\r\nSAP Labs China"
+		//now only support ${Title}  ${UserName}
+		String body = null;
+		if ( success) {
+			body = emailApproveBody;	
+		} else {
+			body = emailRejectBody;
+		}
+		String bodyPart = createEmailTemplateContent(body, reg);
+		return bodyPart + emailSignature;
+	}
+	
+	public String  createICalendarContent(String subProject) throws Exception{
+		ICalendar cal = new ICalendar();
+		
+		//depend on whether need get the sub-project or not, it will get different start/end time
+		if ( subProject == null || subProject.length()==0) {
+			cal.setDuration(  eventStartDateTime, eventEndDateTime);
+			cal.setLocation(location);
+			cal.setTitle(title);
+			cal.setSubject("Event of " + title);
+		} else {
+			Map<String, Object> map = getSubProjectMap(subProject);
+			if ( map != null) {
+				String start = eventStartDateTime,  end = eventEndDateTime;
+				String subStart = (String)map.get("startDateTime");
+				if ( subStart != null && subStart.length()>0) {
+					start = subStart;
+				}
+				String subEnd = (String)map.get("endDateTime");
+				if ( subEnd != null && subEnd.length()>0) {
+					end = subEnd;
+				}
+				cal.setDuration(  start, end);
+				cal.setTitle(title);
+				cal.setSubject("Event of " + title + " " + (String)map.get("info"));
+				
+				// location will be both project part and sub-project part
+				String subLocation = (String)map.get("location");
+				if ( subLocation!=null && subLocation.length()>0 ) {
+					if ( location != null) {
+						cal.setLocation(location + " " + subLocation);
+					} else {
+						cal.setLocation(subLocation);
+					}
+				}
+			} 
+		}
+		
+		
+		//for the description of the iCalendar
+		cal.setDescription( createICalendarContent());
+		return cal.createStringContent();
+	}
+	
+	public Map<String, Object> getSubProjectMap(String subProject) {
+		if ( subProject == null || subProject.length()==0)
+			return null;
+		
+		if (subProjectList == null) {
+			try {
+				subProjectList = JsonUtility.readMapArrayFromString(subProjectInfo);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				return null;
+			}
+		}
+		for (Map<String, Object> map : subProjectList) {
+			String info = (String) map.get("info");
+			if (info.equals(subProject)) {
+				return map;
+			}
+		}
+		return null;
+	}
 	
 	/**
 	 * Get the limit of the sub-project, 0 means no limitation
@@ -248,16 +475,16 @@ public class Project implements Serializable {
 		this.displayProjectInfoAtTop = displayProjectInfoAtTop;
 	}
 	/**
-	 * @return the author
+	 * @return the owner
 	 */
-	public final String getAuthor() {
-		return author;
+	public final String getOwner() {
+		return owner;
 	}
 	/**
-	 * @param author the author to set
+	 * @param owner the owner to set
 	 */
-	public final void setAuthor(String author) {
-		this.author = author;
+	public final void setOwner(String owner) {
+		this.owner = owner;
 	}
 	
 	@PrePersist
@@ -265,26 +492,13 @@ public class Project implements Serializable {
 		UserInfo userInfo = UserMng.getCurrentUserInfo();
 		String userId = userInfo.getUserId();
 		modifiedTime = new Date();
-		setAuthor(userId);
+		setOwner(userId);
+		setOwnerEmail(userInfo.getEmail());
 	}
 	
 	@PreUpdate
 	public void onPreUpdate() {
 		modifiedTime = new Date();
-//		addAuthor();
-	}
-	
-	//??
-	public void addAuthor() {
-		UserInfo userInfo = UserMng.getCurrentUserInfo();
-		String userId = userInfo.getUserId();
-		int pos = author.indexOf(userId);
-		if (pos == -1) {
-			if (author.isEmpty())
-				author = userId;
-			else
-				author = author + "," + userId;
-		} 
 	}
 	
 	/**
@@ -450,7 +664,7 @@ public class Project implements Serializable {
 	public void onPreRemove() throws Exception {
 		UserInfo user = UserMng.getCurrentUserInfo();
 		//only the admin or the owner can delete  the project
-		if ( ! user.isAdmin() && !user.getName().equals(author)) {
+		if ( ! user.isAdmin() && !user.getName().equals(owner)) {
 			throw new Exception("Only the admin or project owner can delete the project");
 		}
 	}
@@ -530,61 +744,7 @@ public class Project implements Serializable {
 		this.location = location;
 	}
 
-	/**
-	 * @return the startDate
-	 */
-	public final String getStartDate() {
-		return startDate;
-	}
-
-	/**
-	 * @param startDate the startDate to set
-	 */
-	public final void setStartDate(String startDate) {
-		this.startDate = startDate;
-	}
-
-	/**
-	 * @return the startTime
-	 */
-	public final String getStartTime() {
-		return startTime;
-	}
-
-	/**
-	 * @param startTime the startTime to set
-	 */
-	public final void setStartTime(String startTime) {
-		this.startTime = startTime;
-	}
-
-	/**
-	 * @return the endDate
-	 */
-	public final String getEndDate() {
-		return endDate;
-	}
-
-	/**
-	 * @param endDate the endDate to set
-	 */
-	public final void setEndDate(String endDate) {
-		this.endDate = endDate;
-	}
-
-	/**
-	 * @return the endTime
-	 */
-	public final String getEndTime() {
-		return endTime;
-	}
-
-	/**
-	 * @param endTime the endTime to set
-	 */
-	public final void setEndTime(String endTime) {
-		this.endTime = endTime;
-	}
+	
 
 	/**
 	 * @return the subProjectTitle
@@ -612,6 +772,76 @@ public class Project implements Serializable {
 	 */
 	public final void setStatus(String status) {
 		this.status = status;
+	}
+
+	/**
+	 * @return the eventStartDateTime
+	 */
+	public final String getEventStartDateTime() {
+		return eventStartDateTime;
+	}
+
+	/**
+	 * @param eventStartDateTime the eventStartDateTime to set
+	 */
+	public final void setEventStartDateTime(String eventStartDateTime) {
+		this.eventStartDateTime = eventStartDateTime;
+	}
+
+	/**
+	 * @return the eventEndDateTime
+	 */
+	public final String getEventEndDateTime() {
+		return eventEndDateTime;
+	}
+
+	/**
+	 * @param eventEndDateTime the eventEndDateTime to set
+	 */
+	public final void setEventEndDateTime(String eventEndDateTime) {
+		this.eventEndDateTime = eventEndDateTime;
+	}
+
+	/**
+	 * @return the regStartDateTime
+	 */
+	public final String getRegStartDateTime() {
+		return regStartDateTime;
+	}
+
+	/**
+	 * @param regStartDateTime the regStartDateTime to set
+	 */
+	public final void setRegStartDateTime(String regStartDateTime) {
+		this.regStartDateTime = regStartDateTime;
+	}
+
+	/**
+	 * @return the regEndDateTime
+	 */
+	public final String getRegEndDateTime() {
+		return regEndDateTime;
+	}
+
+	/**
+	 * @param regEndDateTime the regEndDateTime to set
+	 */
+	public final void setRegEndDateTime(String regEndDateTime) {
+		this.regEndDateTime = regEndDateTime;
+	}
+
+	/**
+	 * @return the ownerEmail
+	 */
+	public final String getOwnerEmail() {
+		return ownerEmail;
+	}
+
+	/**
+	 * @param ownerEmail the ownerEmail to set
+	 */
+	public final void setOwnerEmail(String ownerEmail) {
+		this.ownerEmail = ownerEmail;
 	}
 		
 }

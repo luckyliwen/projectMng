@@ -14,12 +14,12 @@
 			<property name="eclipselink.ddl-generation" value="create-or-extend-tables"/>
 			<property name="eclipselink.jpql.parser" value="org.eclipse.persistence.queries.ANTLRQueryBuilder"/>
 			
-		<property name="eclipselink.logging.level.sql" value="FINE"/>
+		<!-- <property name="eclipselink.logging.level.sql" value="FINE"/>
 		<property name="eclipselink.logging.parameters" value="true" />
 		<property name="eclipselink.logging.connection" value="true" />
 		<property name="eclipselink.logging.session" value="true" />
 		<property name="eclipselink.logging.thread" value="true" />
-		<property name="eclipselink.logging.timestamp" value="true" />
+		<property name="eclipselink.logging.timestamp" value="true" /> -->
                                                          
 		</properties>
 	</persistence-unit>
