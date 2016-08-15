@@ -45,7 +45,7 @@ public class EmailMng  implements ServiceConstant, Runnable {
 	 static private Session mailSession = null;
 	    static InternetAddress fromAddress = null;
 		public static BlockingQueue<EmailMessage> blockQueue = null;
-		
+		private static boolean s_HasTryGetEmailSession  = false;
 		private Transport transport = null;
 		
 	    static {
@@ -55,7 +55,7 @@ public class EmailMng  implements ServiceConstant, Runnable {
 ////				fromAddress = address[0];
 //				
 ////				InitialContext ctx = new InitialContext();
-////				//mail/SAPInternalNWCloudSession  SAPCCPEmail
+//				//mail/SAPInternalNWCloudSession  SAPCCPEmail
 ////				mailSession = (Session)ctx.lookup("java:comp/env/mail/EmailSession");
 //				
 //				logger.error("$$init EmailManage here!!!, {}", mailSession);
@@ -107,14 +107,14 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		});
 
 	}
-	private void getSession() {
+	private static void getSession() {
 		InitialContext ctx;
 		try {
 			ctx = new InitialContext();
 			ConnectivityConfiguration configuration = (ConnectivityConfiguration) ctx.lookup("java:comp/env/connectivityConfiguration");
 
 		    // get destination configuration for "myDestinationName", old name Session
-		    DestinationConfiguration mailConfig = configuration.getConfiguration("SAPCCPEmail");
+		    DestinationConfiguration mailConfig = configuration.getConfiguration("EmailSession");
 		    Map<String, String> map = mailConfig.getAllProperties();
 		    Properties  prop = new Properties();
 		    String user="";
@@ -155,21 +155,25 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		    	            return auth;
 		    	        }
 		    	});
-		    
+		    logger.error("!!Get email session by old way ok {}", mailSession);
 		} catch (NamingException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			logger.error("^^Error of get sesion", e);
 		}
-		
-
 	}
 	
 	public static boolean sendEmail(EmailMessage msg) {
 		try {
 			logger.error("~~~send email {}", msg.toString());
 			
-			if (mailSession != null)
+			if (mailSession == null  && !s_HasTryGetEmailSession) {
+				s_HasTryGetEmailSession = true;
+				getSession();
+			}
+			
+			if (mailSession != null) {
 				blockQueue.put(msg);
+			}
+				
 			return true;
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
@@ -199,9 +203,9 @@ public class EmailMng  implements ServiceConstant, Runnable {
             // Construct message from parameters
             MimeMessage mimeMessage = new MimeMessage(mailSession);
             //??how to get the from address
-//            InternetAddress[] fromAddress = InternetAddress.parse(FROM_ADDRESS);
+            InternetAddress[] fromAddress = InternetAddress.parse(FROM_ADDRESS);
             InternetAddress[] toAddresses = InternetAddress.parse(msg.getTo());
-//            mimeMessage.setFrom(fromAddress[0]);
+            mimeMessage.setFrom(fromAddress[0]);
             mimeMessage.setRecipients(RecipientType.TO, toAddresses);
             
             mimeMessage.setSubject( msg.getSubject(), "UTF-8");
