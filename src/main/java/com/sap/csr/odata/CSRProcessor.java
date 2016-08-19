@@ -13,6 +13,7 @@ import java.util.Set;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.persistence.EntityManager;
+import javax.persistence.NamedQuery;
 import javax.persistence.NoResultException;
 import javax.persistence.Query;
 import javax.persistence.TypedQuery;
@@ -75,78 +76,6 @@ public class CSRProcessor implements ServiceConstant {
 		public int compare(TeamDonation td0, TeamDonation td1) {
 			return Long.compare(td1.amount, td0.amount);
 		}
-	}
-	
-	//As now team may change dynamically, so we need get the team dynamically
-		public String getTeamDonationDynamically() {
-			getEntityManager();
-
-			List<TeamDonation> tdList = new ArrayList<TeamDonation>();
-			
-			// get the team id list:
-			String teamQueryStr = "select t.teamId from Team t where t.teamId <> 0"; 
-			Query query = em.createQuery(teamQueryStr);
-			List<Object> teamIds = query.getResultList();
-			
-			for (Object idObj : teamIds) {
-				long teamId = ((Long)idObj).longValue();
-				
-				//then by the id try to get the register id belong to same team
-				String regQueryStr = "select r.userId from Registration r where r.teamId = " + teamId;
-				Query regQuery = em.createQuery(regQueryStr);
-				List<Object> regIds = regQuery.getResultList();
-				
-				//then create the query for same team 
-				StringBuffer querySb = new StringBuffer(300);
-				querySb.append("select sum(d.amount) from Donation d "); 
-				
-				if (regIds.isEmpty())
-					continue;
-				
-				querySb.append(" where ");
-				int idx = 0;
-				for (Object regIdObj: regIds) {
-					if (idx>0) {
-						querySb.append( " or ");
-					}
-					
-					querySb.append( "d.donatoryId =\"");
-					querySb.append(regIdObj);
-					querySb.append("\" " );
-					
-					idx++;
-				}
-				
-				//add to result list
-				Query donationQuery = em.createQuery(querySb.toString());
-				Object sumObj = donationQuery.getSingleResult();
-				if (sumObj != null) {
-					long  sum = (Long)sumObj;
-					if ( sum != 0) {
-						tdList.add( new TeamDonation(teamId, (Long)sum));
-					}
-				}
-			}
-			
-			//then sort it 
-			Collections.sort(tdList, new AmountComparator());
-			
-			//then create the json string
-			StringBuffer sb = new StringBuffer(2000);
-			sb.append("[");
-			
-			int idx = 0;
-			for (TeamDonation td: tdList) {
-				if (idx > 0) {
-					sb.append(",");
-				}
-				
-				sb.append(td.toJson());
-				idx++;
-			}
-			sb.append("]");
-			
-			return sb.toString();
 	}
 		
 	
@@ -334,6 +263,41 @@ public class CSRProcessor implements ServiceConstant {
 		return sb.toString();
 	}
 	
+	/**
+	 * 
+	 * @param projectId
+	 * @param subProject : true means need get status grouped by sub project
+	 * @return
+	 */
+	@EdmFunctionImport(name = "GetStatusStatistics", returnType = @ReturnType(type = Type.SIMPLE, isCollection = false) )
+	public String GetStatusStatistics(@EdmFunctionImportParameter(name = "ProjectId") String projectId,
+			@EdmFunctionImportParameter(name = "SubProject") String subProject) {
+		getEntityManager();
+		
+		// then the registration by status:
+		String queryStr ;
+		if (  subProject.equals("true")) {
+			 
+			
+//			queryStr = "select r.subProject, r.status, count(r) from Registration r group by r.subProject, r.status where r.projectId=:projectId";
+//			Query query = em.createQuery(queryStr);
+			Query query = em.createNamedQuery(REGISTRATION_COUNT_SUB_PROJECT);
+			query.setParameter("projectId",  Long.parseLong(projectId));
+			String[] regName = { "SubProject", "Status", "Count" };
+			boolean[] regFlag = { true, true, false };
+			
+			return JsonUtility.formatResultAsArray(query.getResultList(), regName, regFlag);
+		} else {
+//			queryStr = "select r.status, count(r) from Registration r group by r.status where r.projectId=:projectId"; 
+//			Query query = em.createQuery(queryStr);
+			Query query = em.createNamedQuery(REGISTRATION_COUNT_ALL_PROJECT);
+			query.setParameter("projectId", Long.parseLong(projectId));
+			String[] regName = { "Status", "Count" };
+			boolean[] regFlag = {true, false };
+			
+			return JsonUtility.formatResultAsArray(query.getResultList(), regName, regFlag);
+		}
+	}
 	
 	@EdmFunctionImport(name = "TestEmail", 
 			returnType = @ReturnType(type = Type.SIMPLE, isCollection = false) )

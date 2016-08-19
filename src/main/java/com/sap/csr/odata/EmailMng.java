@@ -41,7 +41,7 @@ import com.sap.core.connectivity.api.configuration.DestinationConfiguration;
 public class EmailMng  implements ServiceConstant, Runnable {
 	
 	 private static final Logger logger = LoggerFactory.getLogger(EmailMng.class);
-	
+	 private static InternetAddress  s_fromAddress;
 	 static private Session mailSession = null;
 	    static InternetAddress fromAddress = null;
 		public static BlockingQueue<EmailMessage> blockQueue = null;
@@ -49,27 +49,29 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		private Transport transport = null;
 		
 	    static {
-//			try {
-//				//SAPHCPFinOps-notify@sap.com =>SAPHCPFinOps-notify@mail.hana.ondemand.com
-////				InternetAddress[] address = InternetAddress.parse("csr-notify@sap.com");
-////				fromAddress = address[0];
-//				
-////				InitialContext ctx = new InitialContext();
-//				//mail/SAPInternalNWCloudSession  SAPCCPEmail
-////				mailSession = (Session)ctx.lookup("java:comp/env/mail/EmailSession");
-//				
-//				logger.error("$$init EmailManage here!!!, {}", mailSession);
-//			} catch (NamingException e) {
-//				// TODO Auto-generated catch block
-//				logger.error("Get mail session error", e);
-//			}
-//			/*catch (AddressException addressException) {
-//				logger.error("Get from address failure", addressException);
-//			}*/
+	    		/*InternetAddress[] address;
+				try {
+					//
+					address = InternetAddress.parse("SAPHCPFinOps-notify@sap.com");
+					fromAddress = address[0];
+				} catch (AddressException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}*/
+
+				/*InitialContext ctx;
+				try {
+					ctx = new InitialContext();
+					mailSession = (Session)ctx.lookup("java:comp/env/mail/EmailSession");
+				} catch (NamingException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}*/
+				
 		
-	    	blockQueue = new LinkedBlockingQueue<EmailMessage>();
-	    	Thread thread = new Thread(new EmailMng());
-	    	thread.start();
+		    	blockQueue = new LinkedBlockingQueue<EmailMessage>();
+		    	Thread thread = new Thread(new EmailMng());
+		    	thread.start();
 	    }
 	    
 	
@@ -119,7 +121,7 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		    Properties  prop = new Properties();
 		    String user="";
 			String password="";
-			int smtpPort = 465;
+			int smtpPort = 465; 
 		    
 		    for (String key :  map.keySet()) {
 		    	if ( key.equals("Name") || key.equals("Type")) {
@@ -128,9 +130,12 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		    	
 		    	String val = map.get(key);
 		    	//As now mail destination can't use the upper case letter, so get the low case here		    	
-		    	if (key.equals("mail.smtp.socketfactory.port")) {
+//		    	if (key.equals("mail.smtp.socketfactory.port")) {
+//		    		smtpPort = Integer.parseInt(val);
+//		    		continue;
+//		    	}
+		    	if ( key.equals("mail.smtp.port")) {
 		    		smtpPort = Integer.parseInt(val);
-		    		continue;
 		    	}
 		    	
 		    	prop.put(key, val);
@@ -140,6 +145,10 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		    		password = val;
 		    	}
 		    }
+		    //Now we got user, so can set the fromAddress
+		    InternetAddress[] fromAddress = InternetAddress.parse(user);
+		    s_fromAddress = fromAddress[0];
+		    
 		    //As now destination can't add the upper case letter, so set it here
 		    //??test sap mail, old "465"
 		    prop.put("mail.smtp.socketFactory.port", smtpPort);
@@ -148,7 +157,7 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		    final javax.mail.PasswordAuthentication auth =  new javax.mail.PasswordAuthentication(
 	                user, password);
 		    
-		    mailSession = Session.getInstance(prop);
+//		    mailSession = Session.getInstance(prop);
 		    mailSession = Session.getDefaultInstance(prop, 
 		    	    new javax.mail.Authenticator(){
 		    	        protected javax.mail.PasswordAuthentication getPasswordAuthentication() {
@@ -157,6 +166,8 @@ public class EmailMng  implements ServiceConstant, Runnable {
 		    	});
 		    logger.error("!!Get email session by old way ok {}", mailSession);
 		} catch (NamingException e) {
+			logger.error("^^Error of get sesion", e);
+		} catch (AddressException e) {
 			logger.error("^^Error of get sesion", e);
 		}
 	}
@@ -203,9 +214,10 @@ public class EmailMng  implements ServiceConstant, Runnable {
             // Construct message from parameters
             MimeMessage mimeMessage = new MimeMessage(mailSession);
             //??how to get the from address
-            InternetAddress[] fromAddress = InternetAddress.parse(FROM_ADDRESS);
+//            InternetAddress[] fromAddress = InternetAddress.parse(FROM_ADDRESS);
             InternetAddress[] toAddresses = InternetAddress.parse(msg.getTo());
-            mimeMessage.setFrom(fromAddress[0]);
+            mimeMessage.setFrom(s_fromAddress);
+            
             mimeMessage.setRecipients(RecipientType.TO, toAddresses);
             
             mimeMessage.setSubject( msg.getSubject(), "UTF-8");
@@ -233,6 +245,8 @@ public class EmailMng  implements ServiceConstant, Runnable {
             transport = mailSession.getTransport();
             transport.connect();
             transport.sendMessage(mimeMessage, mimeMessage.getAllRecipients());
+            
+            logger.error("###send email successful");
             return true;
          
         } catch (Exception e) {

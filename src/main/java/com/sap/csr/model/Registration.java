@@ -37,7 +37,11 @@ import com.sap.csr.odata.Util;
 @NamedQuery(name = ServiceConstant.REGISTRATION_FROM_WAITLIST,
 	query="select r from Registration r where r.projectId = :projectId and r.status=com.sap.csr.model.Status.Waiting order by r.submittedTime"),
 @NamedQuery(name = ServiceConstant.REGISTRATION_FROM_WAITLIST_SUBPROJECT,
-query="select r from Registration r where r.projectId = :projectId and r.subProject=:subProject and r.status=com.sap.csr.model.Status.Waiting  order by r.submittedTime"),
+   query="select r from Registration r where r.projectId = :projectId and r.subProject=:subProject and r.status=com.sap.csr.model.Status.Waiting  order by r.submittedTime"),
+@NamedQuery(name = ServiceConstant.REGISTRATION_COUNT_ALL_PROJECT,
+	query="select r.status, count(r) from Registration r where r.projectId = :projectId group by r.status "),
+@NamedQuery(name = ServiceConstant.REGISTRATION_COUNT_SUB_PROJECT ,
+	query="select r.subProject, r.status, count(r) from Registration r  where r.projectId = :projectId group by r.subProject, r.status")
 })
 
 public class Registration extends BaseModel implements ServiceConstant {
@@ -56,8 +60,6 @@ public class Registration extends BaseModel implements ServiceConstant {
 	private String userName; // employee name, get from IdP
 	private String subProject; // needed when it has sub-project limitation
 
-	// for approve, calcel, reject
-	// private String status ;
 	@Enumerated(EnumType.STRING)
 	private Status status;
 	private String rejectReason;
@@ -329,9 +331,10 @@ public class Registration extends BaseModel implements ServiceConstant {
 		} else if ( actionFlag == ActionFlag.Promote) {
 			//now not check, admin have more power! and he can adjust the number by himself
 			sendEmailNotification();
+			return;
 		}
 		else if ( actionFlag == ActionFlag.Cancel ) {
-			//as the cancel only happend on few time, so send email to owner
+			//as the cancel only happen on few time, so send email to owner
 			getProject();
 			boolean success =  tryPromoteOneFromWaitingList();
 			project.sendCancelNotify(this, success);

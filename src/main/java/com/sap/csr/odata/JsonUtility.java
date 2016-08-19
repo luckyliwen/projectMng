@@ -42,6 +42,45 @@ public class JsonUtility {
 	     return map;
 	}
 	
+	/**
+	 * 
+	 * @param list
+	 * @param names
+	 * @param flags : whether need add the " 
+	 * @return
+	 */
+	public static String formatResultAsArray(List<Object[]> list, String[] names, boolean []flags ) {
+		StringBuffer sb = new StringBuffer("[");
+		int row = 0;
+		for (Object[] objs: list) {
+			if (row > 0) {
+				sb.append(",{");
+			} else {
+				sb.append("{");
+			}
+			
+			int i=0;
+			for (String name : names ) {
+				if (i==0) {
+					sb.append("\"" + name +"\":");
+				} else {
+					sb.append(",\"" + name +"\":");
+				}
+				if ( flags[i]) {
+					sb.append("\"" +  objs[i] + "\"");
+				} else {
+					sb.append(objs[i]);
+				}
+				i++;
+			}
+			sb.append("}");
+			row ++;
+		}
+		sb.append("]");
+		
+		return sb.toString();
+	}
+	
 	public static void main(String []args) {
 //		String json = "{\"name\": \"lucky\"}";
 		String json="[ {\"name\": \"lucky\", \"age\": \"12\"}, {\"name\": \"lucky2\"}]";
