@@ -173,7 +173,7 @@ public class EmailMng  implements ServiceConstant, Runnable {
 	}
 	
 	public static boolean sendEmail(EmailMessage msg) {
-		try {
+		/*try {
 			logger.error("~~~send email {}", msg.toString());
 			
 			if (mailSession == null  && !s_HasTryGetEmailSession) {
@@ -190,7 +190,8 @@ public class EmailMng  implements ServiceConstant, Runnable {
 			// TODO Auto-generated catch block
 			logger.error("Error in sendEmail", e);
 			return false;
-		}
+		}*/
+		return true;
 	}
 	
 	public void run() {
