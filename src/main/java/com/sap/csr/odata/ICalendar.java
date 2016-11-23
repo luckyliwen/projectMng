@@ -15,16 +15,12 @@ import org.slf4j.LoggerFactory;
 
 import net.fortuna.ical4j.model.Date;
 
-import net.fortuna.ical4j.data.CalendarOutputter;
-import net.fortuna.ical4j.model.Calendar;
-import net.fortuna.ical4j.model.Dur;
-import net.fortuna.ical4j.model.ValidationException;
+
 import net.fortuna.ical4j.model.component.VEvent;
 import net.fortuna.ical4j.model.property.Description;
 import net.fortuna.ical4j.model.property.Location;
 import net.fortuna.ical4j.model.property.Version;
-import net.fortuna.ical4j.util.Dates;
-import net.fortuna.ical4j.util.TimeZones;
+
 import net.fortuna.ical4j.util.UidGenerator;
 
 public class ICalendar {

@@ -148,11 +148,12 @@ public class AttachmentMng extends HttpServlet implements ServiceConstant {
 
 		Attachment input = getAttachmentInfo(request, true);
 		Query query = null;
-		query = em.createNamedQuery( ATTACHMENT_BY_ENTRY_AND_TYPE );
+		query = em.createNamedQuery( ATTACHMENT_BY_ALL_PARAM );
 
 		query.setParameter("entryId", input.getEntryId());
 		query.setParameter("type", input.getType());
-		 
+		query.setParameter("userId", input.getUserId());
+		query.setParameter("projectId", input.getProjectId());
 		
 		Attachment old = null;
 		try {
@@ -205,9 +206,11 @@ public class AttachmentMng extends HttpServlet implements ServiceConstant {
 		
 		Attachment input = getAttachmentInfo(request, false);
 		Query query = null;
-		query = em.createNamedQuery( ATTACHMENT_BY_ENTRY_AND_TYPE );
+		query = em.createNamedQuery( ATTACHMENT_BY_ALL_PARAM );
 		query.setParameter("entryId", input.getEntryId());
 		query.setParameter("type", input.getType());
+		query.setParameter("userId", input.getUserId());
+		query.setParameter("projectId", input.getProjectId());
 
 		
 		Attachment old = null;
