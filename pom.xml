@@ -11,14 +11,14 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<com.sap.cloud.neo.api-version>2.32.11</com.sap.cloud.neo.api-version>
+		<com.sap.cloud.neo.api-version>2.142.8</com.sap.cloud.neo.api-version>
 	</properties>
 
 	<dependencies>
 		<dependency>
 	      <groupId>org.mnode.ical4j</groupId>
 	      <artifactId>ical4j</artifactId>
-	      <version>2.0.1-SNAPSHOT</version>
+	      <version>3.0.1</version>
 	    </dependency>
 	    <dependency>
 	   	 <groupId>org.apache.commons</groupId>
@@ -32,8 +32,8 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.sap.cloud</groupId>
-			<artifactId>neo-java-web-api</artifactId>
+			<groupId>com.sap.cloud</groupId>		
+			<artifactId>neo-javaee6-wp-api</artifactId>
 			<version>${com.sap.cloud.neo.api-version}</version>
 			<scope>provided</scope>
 		</dependency>

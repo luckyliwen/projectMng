@@ -133,8 +133,9 @@ END:VCALENDAR
 		descProp.setValue(description);
 		vEvent.getProperties().add(descProp);
 
-		UidGenerator ug = new UidGenerator("SAP Advance Event Management Tool-");
-		vEvent.getProperties().add(ug.generateUid());
+		//??new version not work, just comments out for build
+		//UidGenerator ug = new UidGenerator("SAP Advance Event Management Tool-");
+		//vEvent.getProperties().add(ug.generateUid());
 
 		net.fortuna.ical4j.model.Calendar cal = new net.fortuna.ical4j.model.Calendar();
 		cal.getComponents().add(vEvent);
