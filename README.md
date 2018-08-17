@@ -10,7 +10,9 @@ It provides following features:
 You can try the version in [https://projectui5-p2000536732trial.dispatcher.hanatrial.ondemand.com/mng/index.html](https://projectui5-p2000536732trial.dispatcher.hanatrial.ondemand.com/mng/index.html)
 
 # How to setup in NEO environment. 
-   Please first create one DB according to this guideline [steps-to-create-database-tables-in-sap-hana-cloud-platform-formerly-hcp.](https://blogs.sap.com/2017/05/31/steps-to-create-database-tables-in-sap-hana-cloud-platform-formerly-hcp./)
+   1. Create one DB according to this guideline [steps-to-create-database-tables-in-sap-hana-cloud-platform-formerly-hcp.](https://blogs.sap.com/2017/05/31/steps-to-create-database-tables-in-sap-hana-cloud-platform-formerly-hcp./)
+   2. Enable the "Principle Propagation" in HCP Cockpit ( UI5 application will access Java backend OData which need this, otherwise you will get 401 error when access the OData)
+         In HCP Cockpit, go to "Security / Trust", in the "Local Service Provider", set the "Principle Propagation" to "Enabled"
 
 ## Deploy Java application projectMng
    1. Download the project projectui5 from github, and compile it by run "mvn install" in the root project. 
